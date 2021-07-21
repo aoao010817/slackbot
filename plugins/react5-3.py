@@ -39,12 +39,21 @@ def janomeAnalyzer(text):
 
 # キーワード照合ルールのリスト（keywordMatchingRuleオブジェクトのリスト）
 kRuleList = []
+# キーワードスコアルールのリスト（keywordScoreRuleオブジェクトのリスト）
+sRuleList = []
 # 応答候補のリスト（ResponseCandidateオブジェクトのリスト）
 candidateList = []
 
 # キーワード照合ルールのクラス（キーワードと応答の組み合わせ）
 class KeywordMatchingRule:
     def __init__(self, keyword, response):
+        self.keyword = keyword
+        self.response = response
+
+# キーワードスコアルールのクラス（スコアとキーワードと応答の組み合わせ）
+class KeywordScoreRule:
+    def __init__(self, score, keyword, response):
+        self.score = score
         self.keyword = keyword
         self.response = response
 
@@ -71,6 +80,22 @@ def generateResponseByRule(inputText):
         if(rule.keyword in inputText):
             # キーワードに対応する応答文とスコアでResponseCandidateオブジェクトを作成してcandidateListに追加
             cdd = ResponseCandidate(rule.response, 1.0 + random.random())
+            candidateList.append(cdd)
+
+# キーワードスコアルールを初期化する関数
+def setupKeywordScoreRule():
+    sRuleList.clear()
+    for line in open('kw_score_rule.txt', 'r', encoding="utf_8"):
+        arr = line.split(",")    
+        sRuleList.append(KeywordScoreRule(arr[0], arr[1].strip(), arr[2].strip()))
+        
+# キーワードスコアルールを利用した応答候補を生成する関数
+def generateResponseByScore(inputText):
+    for rule in sRuleList:
+        # ルールのキーワードが入力テキストに含まれていたら
+        if(rule.keyword in inputText):
+            # キーワードに対応する応答文とスコアでResponseCandidateオブジェクトを作成してcandidateListに追加
+            cdd = ResponseCandidate(rule.response, rule.score * 0.65 + random.random())
             candidateList.append(cdd)
 
 # ユーザ入力文に含まれる名詞を利用した応答候補を生成する関数
@@ -117,6 +142,7 @@ def generateResponse(inputText):
             maxScore = cdd.score
     return ret
 
+setupKeywordScoreRule()
 setupKeywordMatchingRule()
 
 # 学習モード移行
@@ -165,14 +191,14 @@ def scoring(message, text, output): #採点アンケートを送信
     score = checkReactions(message, ts)
     recordScore(score, text, output)
     if score == 0:
-        message.reply("精進します。。")
+        message.reply("もっと頑張るね。。")
     elif score == 1:
-        message.reply("ありがとうございます！")
+        message.reply("ありがとう！")
     elif score == 2:
         message.reply("やったー！！")
     
 
-def checkReactions(message, ts):
+def checkReactions(message, ts): # リアクションを取得
     COUNT_LIST = [0, 0, 0]
 
     while True:
@@ -192,8 +218,8 @@ def checkReactions(message, ts):
                 return i
             time.sleep(0.5) 
 
-def recordScore(score, text, output):
-    path = "score_matching_rule.txt"
+def recordScore(score, text, output): # スコアと対話者の送信文と返信をkw_score_rule.txtに保存
+    path = "kw_score_rule.txt"
     with open(path, mode="a", encoding="utf-8") as f:
         f.write(str(score)+","+str(text)+","+str(output)+"\n")
 
