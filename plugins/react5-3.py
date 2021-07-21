@@ -6,6 +6,8 @@ from janome.tokenizer import Tokenizer
 import random
 import time
 
+learningFlg = 1 # 学習モード状況を保持
+
 # 単語のクラス
 class Word:
     def __init__(self, token):
@@ -117,7 +119,7 @@ def generateResponse(inputText):
 
 setupKeywordMatchingRule()
 
-learningFlg = 0 # 学習モード状況を保持
+# 学習モード移行
 def learning():
     global learningFlg
     learningFlg = 1
@@ -125,7 +127,7 @@ def learnExit():
     global learningFlg
     learningFlg = 0
 
-def scoring(message): #採点アンケートを送信
+def scoring(message, text, output): #採点アンケートを送信
     EMOJIS = (
         "zero",
         "one",
@@ -139,8 +141,8 @@ def scoring(message): #採点アンケートを送信
 
     send_user = message.channel._client.users[message.body['user']][u'name']
     post = {
-        'pretext': message.body['text'],
-        'title': "この返信を採点してください",
+        'pretext': output,
+        'title': "この返信を採点してください！",
         'text': '\n'.join(OPTIONS),
         'color': 'good'
     }
@@ -160,17 +162,45 @@ def scoring(message): #採点アンケートを送信
             channel=message._body['channel'],
             timestamp=ts
         )
-    for i in range(3):
-        print(message._client.webapi.reactions.get(
+    score = checkReactions(message, ts)
+    recordScore(score, text, output)
+    if score == 0:
+        message.reply("精進します。。")
+    elif score == 1:
+        message.reply("ありがとうございます！")
+    elif score == 2:
+        message.reply("やったー！！")
+    
+
+def checkReactions(message, ts):
+    COUNT_LIST = [0, 0, 0]
+
+    while True:
+        response = message._client.webapi.reactions.get(
             channel=message._body['channel'],
             timestamp=ts
-        ).message.reactions[i].count)
-    
+        )
+        FIRST_COUNT_NUM = str(response).find("count", str(response).rfind("zero"))
+        SECOND_COUNT_NUM = str(response).find("count", str(response).rfind("one"))
+        THIRD_COUNT_NUM = str(response).find("count", str(response).rfind("two"))
+
+        COUNT_LIST[0] = (str(response)[FIRST_COUNT_NUM+8])
+        COUNT_LIST[1] = (str(response)[SECOND_COUNT_NUM+8])
+        COUNT_LIST[2] = (str(response)[THIRD_COUNT_NUM+8])
+        for i in range(len(COUNT_LIST)):
+            if int(COUNT_LIST[i]) == 2:
+                return i
+            time.sleep(0.5) 
+
+def recordScore(score, text, output):
+    path = "score_matching_rule.txt"
+    with open(path, mode="a", encoding="utf-8") as f:
+        f.write(str(score)+","+str(text)+","+str(output)+"\n")
+
 
 # デフォルトの返答
 @default_reply()
 def default(message):
-    print(message)
     # Slackの入力を取得
     text = message.body['text']
     
@@ -185,7 +215,7 @@ def default(message):
         output = generateResponse(text)
         # Slackで返答
         if learningFlg == 1:
-            scoring(message)
+            scoring(message, text, output)
             
         elif learningFlg == 0:
             message.reply(output)
