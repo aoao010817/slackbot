@@ -223,6 +223,40 @@ def recordScore(score, text, output): # スコアと対話者の送信文と返�
     with open(path, mode="a", encoding="utf-8") as f:
         f.write(str(score)+","+str(text)+","+str(output)+"\n")
 
+def runSL(message):
+    sl = [
+        ".....................(  ) (@@) (   ) (@@@) 0 0 0 ..............................................",
+        "                 ( )                                                                             .",
+        "                0                                                                               .",
+        "               ++      +------  ____________________  ____________________ ____________________ ",
+        "               ||      |+-+ |   |  ___ ___ ___ ___ |  |  ___ ___ ___ ___ | |  ___ ___ ___ ___ | ",
+        "             /---------|| | |   |  |＿| |＿| |＿| |＿| |  |  |＿| |＿| |＿| |＿| | |  |＿| |＿| |＿| |＿| | ",
+        "            + ========  +-+ |   |__________________|  |__________________| |__________________| ",
+        "           _|--O========O~\\-+  |__________________|  |__________________| |__________________| ",
+        "          ////.\\_/______\\_/_____(O)__________(O)_____(O)____________(O)___(O)____________(O)    ",]
+    
+    text = ""
+    for row in sl:
+        text += row[:40] + "\n"
+
+    ret = message._client.webapi.chat.post_message(
+        message._body['channel'],
+        as_user=True,
+        text=text
+    )
+    ts = ret.body['ts']
+
+    for i in range(1, 100):
+        text = ""
+        for row in sl:
+            text += row[i:i+40] + "\n"
+        message._client.webapi.chat.update(
+            message._body['channel'],
+            ts,
+            as_user=True,
+            text=text
+        )
+
 
 # デフォルトの返答
 @default_reply()
@@ -230,12 +264,16 @@ def default(message):
     # Slackの入力を取得
     text = message.body['text']
     
-    if text == "learn":
+    if text == "$learn":
         learning()
-        message.reply("Learning Mode (退出の際は「exit」と送信してください)")
-    elif text == "exit":
+        message.reply("Learning Mode (退出の際は「$exit」と入力してください)")
+    elif text == "$exit":
         learnExit()
         message.reply("Exit Learning Mode")
+    elif text == "$sl":
+        runSL(message)
+    elif text[0] == "$":
+        message.reply("Command not found")
     else:
         # システムの出力を生成
         output = generateResponse(text)
