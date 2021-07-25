@@ -8,8 +8,21 @@ import time
 import numpy as np
 import requests
 from bs4 import BeautifulSoup
+import requests
 
-learningFlg = 0 # 学習モード状況を保持
+learningFlg = 1 # 学習モード状況を保持
+
+import pickle
+
+# 保存したモデルをロードする
+filename = "svmclassifier.pkl"
+loaded_classifier = pickle.load(open(filename, "rb"))
+
+# 単語リストを読み込みリストに保存
+basicFormList = []
+bffile = "basicFormList.txt"
+for line in open(bffile, "r", encoding="utf_8"):
+    basicFormList.append(line.strip())
 
 # 単語のクラス
 class Word:
@@ -101,13 +114,16 @@ def generateResponseByScore(inputText):
     cs_array = np.round(cosine_similarity(vecs_array(docs), vecs_array(docs)),3)
     for i in range(cs_array.shape[0]):
         cs_array[i, i] = 0
+        cs_array[0, i] = cs_array[0, i] * int(sRuleList[i - 1].score)
     print(cs_array)
-    output_index = np.argmax(cs_array) - 1 
-    print(sRuleList[output_index].response)
-    print(np.argmax(cs_array))
+    output_index = cs_array.argmax(axis=1)[0] 
     # キーワードに対応する応答文とスコアでResponseCandidateオブジェクトを作成してcandidateListに追加
-    cdd = ResponseCandidate(sRuleList[output_index].response, int(sRuleList[output_index].score) * 0.6 + np.argmax(cs_array))
-    candidateList.append(cdd)
+    try:
+        cdd = ResponseCandidate(sRuleList[output_index-1].response, cs_array[0, output_index] + 0.3)
+        candidateList.append(cdd)
+    except:
+        return
+        
 
 # テキストをベクトル化する関数
 def vecs_array(documents):
@@ -149,6 +165,108 @@ def generateOtherResponse():
     cdd = ResponseCandidate(random.choice(bunanList), 0.5 + random.random())
     candidateList.append(cdd)
 
+from collections import Counter
+
+# 単語情報リストを渡すとカウンターを返す関数
+def makeCounter(wordList):
+    basicFormList = []
+    for word in wordList:
+        basicFormList.append(word.basicForm)
+    # 単語の原型のカウンターを作成
+    counter = Counter(basicFormList)
+    return counter
+
+# Counterのリストと単語リストからベクトルのリストを作成する関数
+def makeVectorList(counterList, basicFormList):
+    vectorList = []
+    for counter in counterList:
+        vector = []
+        for word in basicFormList:
+            vector.append(counter[word])
+        vectorList.append(vector)
+    return vectorList  
+
+from sklearn import svm
+
+# ネガポジ判定の結果を返す関数
+# 引数 text:入力文, classifier：学習済みモデル, basicFormList：ベクトル化に使用する単語リスト
+def negaposiAnalyzer(text, classifier, basicFormList):
+    # 形態素解析して頻度のCounterを作成
+    counterList = []
+    wordlist = janomeAnalyzer(text)
+    counter = makeCounter(wordlist)
+    
+    # 1文のcounterだが，counterListに追加
+    counterList.append(counter)
+
+    # Counterリストと単語リストからベクトルのリストを作成
+    vectorList = makeVectorList(counterList, basicFormList)
+
+    # ベクトルのリストに対してネガポジ判定
+    predict_label = classifier.predict(vectorList)
+
+    # 入力文のベクトル化に使用された単語を出力
+    for vector in vectorList:
+        wl=[]
+        for i, num in enumerate(vector):
+            if(num==1):
+                wl.append(basicFormList[i])
+
+    # 予測結果によって出力を決定
+    if predict_label[0]=="1":
+        output = "よかったね"
+    else:
+        output = "ざんねん"
+
+    return output
+
+def generateNegaposiResponse(inputText):
+    # ネガポジ判定を実行
+    output = negaposiAnalyzer(inputText, loaded_classifier, 
+                              basicFormList)
+    
+    # 応答候補に追加
+    cdd = ResponseCandidate(output, 0.7 + random.random())
+    candidateList.append(cdd) 
+
+def wikipedia(inputWordList):
+    for w in inputWordList:
+        pos2 = w.pos.split(",")
+        # 品詞が名詞だったら
+        if pos2[0]=='名詞':
+            url = "https://ja.m.wikipedia.org/wiki/" + w.basicForm
+            try:
+                res = requests.get(url)
+                soup = BeautifulSoup(res.text, "html.parser")
+                texts = soup.select("#mf-section-0 > p")
+                output = texts[0].text
+                cdd = ResponseCandidate(output, 0.6 + random.random())
+                candidateList.append(cdd)
+            except:
+                return
+            
+            try:
+                main = soup.find("main")
+                links = main.find_all("a")
+                link = random.choice(links).text
+                if len(link)>0 and len(link)<5:
+                    connectionWikipedia(link)
+            except:
+                return
+
+
+def connectionWikipedia(word):
+    try:
+        url = "https://ja.m.wikipedia.org/wiki/" + str(word)
+        res = requests.get(url)
+        soup = BeautifulSoup(res.text, "html.parser")
+        texts = soup.select("#mf-section-0 > p")
+        output = texts[0].text
+        cdd = ResponseCandidate(output, 0.55 + random.random())
+        candidateList.append(cdd)
+    except:
+        return
+
 # 応答文を生成する関数
 def generateResponse(inputText):
     # 応答文候補を空にしておく
@@ -159,6 +277,8 @@ def generateResponse(inputText):
     generateResponseByRule(inputText)
     generateResponseByInputTopic(wordlist)
     generateOtherResponse()
+    generateNegaposiResponse(inputText)
+    wikipedia(wordlist)
     if learningFlg == 0:
         generateResponseByScore(inputText)
           
@@ -231,8 +351,10 @@ def scoring(message, text, output): #採点アンケートを送信
 
 def checkReactions(message, ts): # リアクションを取得
     COUNT_LIST = [0, 0, 0]
+    count = 0
 
     while True:
+        count += 1
         response = message._client.webapi.reactions.get(
             channel=message._body['channel'],
             timestamp=ts
@@ -248,6 +370,8 @@ def checkReactions(message, ts): # リアクションを取得
             if int(COUNT_LIST[i]) == 2:
                 return i
             time.sleep(0.5) 
+        if count >= 20:
+            break
 
 def recordScore(score, text, output): # スコアと対話者の送信文と返信をkw_score_rule.txtに保存
     path = "kw_score_rule.txt"
@@ -295,7 +419,9 @@ def default(message):
     # Slackの入力を取得
     text = message.body['text']
     
-    if text == "$learn":
+    if text == "":
+        message.reply("なにか言ってよ!")
+    elif text == "$learn":
         learning()
         message.reply("Learning Mode (退出の際は「$exit」と入力してください)")
     elif text == "$exit":
@@ -304,7 +430,7 @@ def default(message):
     elif text == "$sl":
         runSL(message)
     elif text[0] == "$":
-        message.reply("Command not found")
+            message.reply("Command not found")
     else:
         # システムの出力を生成
         output = generateResponse(text)
