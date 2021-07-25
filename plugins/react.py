@@ -5,8 +5,11 @@ import slackbot_settings
 from janome.tokenizer import Tokenizer
 import random
 import time
+import numpy as np
+import requests
+from bs4 import BeautifulSoup
 
-learningFlg = 1 # 学習モード状況を保持
+learningFlg = 0 # 学習モード状況を保持
 
 # 単語のクラス
 class Word:
@@ -91,12 +94,38 @@ def setupKeywordScoreRule():
         
 # キーワードスコアルールを利用した応答候補を生成する関数
 def generateResponseByScore(inputText):
+    from sklearn.metrics.pairwise import cosine_similarity
+    docs = [inputText]
     for rule in sRuleList:
-        # ルールのキーワードが入力テキストに含まれていたら
-        if(rule.keyword in inputText):
-            # キーワードに対応する応答文とスコアでResponseCandidateオブジェクトを作成してcandidateListに追加
-            cdd = ResponseCandidate(rule.response, rule.score * 0.65 + random.random())
-            candidateList.append(cdd)
+        docs.append(rule.keyword)
+    cs_array = np.round(cosine_similarity(vecs_array(docs), vecs_array(docs)),3)
+    for i in range(cs_array.shape[0]):
+        cs_array[i, i] = 0
+    print(cs_array)
+    output_index = np.argmax(cs_array) - 1 
+    print(sRuleList[output_index].response)
+    print(np.argmax(cs_array))
+    # キーワードに対応する応答文とスコアでResponseCandidateオブジェクトを作成してcandidateListに追加
+    cdd = ResponseCandidate(sRuleList[output_index].response, int(sRuleList[output_index].score) * 0.6 + np.argmax(cs_array))
+    candidateList.append(cdd)
+
+# テキストをベクトル化する関数
+def vecs_array(documents):
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    docs = np.array(documents)
+    vectorizer = TfidfVectorizer(analyzer=wakachi,binary=True,use_idf=False)
+    vecs = vectorizer.fit_transform(docs)
+    return vecs.toarray()
+
+
+# わかち書きにする関数
+def wakachi(text):
+    t = Tokenizer()
+    tokens = t.tokenize(text)
+    docs=[]
+    for token in tokens:
+        docs.append(token.surface)
+    return docs
 
 # ユーザ入力文に含まれる名詞を利用した応答候補を生成する関数
 def generateResponseByInputTopic(inputWordList):
@@ -130,6 +159,8 @@ def generateResponse(inputText):
     generateResponseByRule(inputText)
     generateResponseByInputTopic(wordlist)
     generateOtherResponse()
+    if learningFlg == 0:
+        generateResponseByScore(inputText)
           
     ret="デフォルト"
     maxScore=-1.0
