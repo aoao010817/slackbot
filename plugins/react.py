@@ -95,7 +95,7 @@ def generateResponseByRule(inputText):
         # ルールのキーワードが入力テキストに含まれていたら
         if(rule.keyword in inputText):
             # キーワードに対応する応答文とスコアでResponseCandidateオブジェクトを作成してcandidateListに追加
-            cdd = ResponseCandidate(rule.response, 1.0 + random.random())
+            cdd = ResponseCandidate(rule.response, 0.7 + random.random())
             candidateList.append(cdd)
 
 # キーワードスコアルールを初期化する関数
@@ -119,7 +119,7 @@ def generateResponseByScore(inputText):
     output_index = cs_array.argmax(axis=1)[0] 
     # キーワードに対応する応答文とスコアでResponseCandidateオブジェクトを作成してcandidateListに追加
     try:
-        cdd = ResponseCandidate(sRuleList[output_index-1].response, cs_array[0, output_index] + 0.3)
+        cdd = ResponseCandidate(sRuleList[output_index-1].response, cs_array[0, output_index] + 0.4)
         candidateList.append(cdd)
     except:
         return
@@ -153,7 +153,7 @@ def generateResponseByInputTopic(inputWordList):
         # 品詞が名詞だったら
         if pos2[0]=='名詞':
             cdd = ResponseCandidate(w.basicForm + random.choice(textList), 
-                                    0.7 + random.random())
+                                    0.6 + random.random())
             candidateList.append(cdd)
             
 # 無難な応答を返す関数
@@ -240,7 +240,7 @@ def wikipedia(inputWordList):
                 soup = BeautifulSoup(res.text, "html.parser")
                 texts = soup.select("#mf-section-0 > p")
                 output = texts[0].text
-                cdd = ResponseCandidate(output, 0.6 + random.random())
+                cdd = ResponseCandidate(output, 0.7 + random.random())
                 candidateList.append(cdd)
             except:
                 return
@@ -262,7 +262,7 @@ def connectionWikipedia(word):
         soup = BeautifulSoup(res.text, "html.parser")
         texts = soup.select("#mf-section-0 > p")
         output = texts[0].text
-        cdd = ResponseCandidate(output, 0.55 + random.random())
+        cdd = ResponseCandidate(output, 0.6 + random.random())
         candidateList.append(cdd)
     except:
         return
@@ -340,13 +340,14 @@ def scoring(message, text, output): #採点アンケートを送信
             timestamp=ts
         )
     score = checkReactions(message, ts)
-    recordScore(score, text, output)
-    if score == 0:
-        message.reply("もっと頑張るね。。")
-    elif score == 1:
-        message.reply("ありがとう！")
-    elif score == 2:
-        message.reply("やったー！！")
+    if score != None:
+        recordScore(score, text, output)
+        if score == 0:
+            message.reply("もっと頑張るね。。")
+        elif score == 1:
+            message.reply("ありがとう！")
+        elif score == 2:
+            message.reply("やったー！！")
     
 
 def checkReactions(message, ts): # リアクションを取得
