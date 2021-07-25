@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 import requests
 
 learningFlg = 1 # 学習モード状況を保持
+siritoriFlg = 0 # しりとりモード状況を保持
 
 import pickle
 
@@ -226,7 +227,7 @@ def generateNegaposiResponse(inputText):
                               basicFormList)
     
     # 応答候補に追加
-    cdd = ResponseCandidate(output, 0.7 + random.random())
+    cdd = ResponseCandidate(output, 0.6 + random.random())
     candidateList.append(cdd) 
 
 def wikipedia(inputWordList):
@@ -239,7 +240,7 @@ def wikipedia(inputWordList):
                 res = requests.get(url)
                 soup = BeautifulSoup(res.text, "html.parser")
                 texts = soup.select("#mf-section-0 > p")
-                output = texts[0].text
+                output = texts[0].text.strip()
                 cdd = ResponseCandidate(output, 0.7 + random.random())
                 candidateList.append(cdd)
             except:
@@ -261,7 +262,7 @@ def connectionWikipedia(word):
         res = requests.get(url)
         soup = BeautifulSoup(res.text, "html.parser")
         texts = soup.select("#mf-section-0 > p")
-        output = texts[0].text
+        output = texts[0].text.strip
         cdd = ResponseCandidate(output, 0.6 + random.random())
         candidateList.append(cdd)
     except:
@@ -432,6 +433,9 @@ def default(message):
         runSL(message)
     elif text[0] == "$":
             message.reply("Command not found")
+    elif siritoriFlg == 1:
+        print(2)
+        siritori(message)
     else:
         # システムの出力を生成
         output = generateResponse(text)
@@ -454,3 +458,28 @@ def react(message):
     message.reply('ありがとう！')
     message.react('hearts')
     message.react('+1')
+
+
+@respond_to("しりとり")
+def siritori(message):
+    global siritoriFlg
+    WORDLIST = {"あ":"亜鉛","い":"偉人", "う":"うどん", "え":"絵本", "お":"おぼん",
+                "か":"課金","き":"キリン", "く":"句読点", "け":"化身", "こ":"コナン", 
+                "さ":"殺人","し":"詩人", "す":"スピン", "せ":"セダン", "そ":"ソ連", 
+                "た":"タイワン","ち":"チタン", "つ":"ツイン", "て":"手本", "と":"盗難", 
+                "な":"ナン","に":"人間", "ぬ":"ぬーん", "ね":"ネオン", "の":"のれん", 
+                "は":"破産","ひ":"秘伝", "ふ":"不倫", "へ":"ヘレン", "ほ":"保温", 
+                "ま":"マリン","み":"みかん", "む":"夢幻", "め":"メロン", "も":"モダン", 
+                "や":"やかん","ゆ":"勇敢", "よ":"ヨハン",
+                "ら":"ラテン","り":"リーマン", "る":"ルパン", "れ":"レモン", "ろ":"ロマン", 
+                "わ":"ワイン","を":"おぼん", "ん":"勝った！！",
+    }
+    if(siritoriFlg == 0):
+        siritoriFlg = 1
+        message.reply("はじめの言葉をひらがなで言って！")
+    elif(siritoriFlg == 1):
+        siritoriFlg = 0
+        text = message.body['text']
+        message.reply(WORDLIST[text[-1]])
+        
+
