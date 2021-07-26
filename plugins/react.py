@@ -481,5 +481,14 @@ def siritori(message):
         siritoriFlg = 0
         text = message.body['text']
         message.reply(WORDLIST[text[-1]])
-        
 
+@respond_to("天気を教えて")
+def weather(message):
+    url = "https://tenki.jp/lite/forecast/3/16/4410/13201/"
+    res = requests.get(url)
+    soup = BeautifulSoup(res.text, "html.parser")
+    weather = soup.select(".weather-telop")
+    high = soup.select(".high-temp")
+    low = soup.select(".low-temp")
+    output = f"八王子市の今日の天気は{weather[0].text.strip()}。最高気温は{high[1].text.strip()}、最低気温は{low[1].text.strip()}です。"
+    message.reply(output)
