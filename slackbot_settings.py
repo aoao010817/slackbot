@@ -1,7 +1,7 @@
 # coding :utf-8
 
 #botトークン
-API_TOKEN = "xoxb-1226317742771-2252552537335-b5Nr1PORlEtdPPKuLmOd6JrI"
+API_TOKEN = ""
 
 
 #デフォルトの返事
