@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 import requests
 from collections import deque
 
-learningFlg = 1 # 学習モード状況を保持
+learningFlg = 0 # 学習モード状況を保持
 siritoriFlg = 0 # しりとりモード状況を保持
 
 import pickle
@@ -122,7 +122,7 @@ def generateResponseByScore(inputText):
     output_index = cs_array.argmax(axis=1)[0] 
     # キーワードに対応する応答文とスコアでResponseCandidateオブジェクトを作成してcandidateListに追加
     try:
-        cdd = ResponseCandidate(sRuleList[output_index-1].response, cs_array[0, output_index] + 0.4)
+        cdd = ResponseCandidate(sRuleList[output_index-1].response, cs_array[0, output_index]*sRuleList[output_index-1].score)
         candidateList.append(cdd)
     except:
         return
@@ -229,7 +229,7 @@ def generateNegaposiResponse(inputText):
                               basicFormList)
     
     # 応答候補に追加
-    cdd = ResponseCandidate(output, 0.6 + random.random())
+    cdd = ResponseCandidate(output, 0.5 + random.random())
     candidateList.append(cdd) 
 
 def wikipedia(inputWordList):
@@ -270,51 +270,52 @@ def connectionWikipedia(word):
         return
 
 # 2階マルコフ連鎖のモデルを作成
-# def makeModel(order=2):
-#     model = {}
-#     queue = deque([], order)
-#     queue.append("[BOS]")
-#     for text in sRuleList:
-#         wordlist = wakachi(text.keyword)
-#         for markov_value in wordlist:
-#             if len(queue) < order:
-#                 queue.append(markov_value)
-#                 continue
+def makeModel(order=2):
+    model = {}
+    queue = deque([], order)
+    queue.append("[BOS]")
+    for text in sRuleList:
+        wordlist = wakachi(text.keyword)
+        for markov_value in wordlist:
+            if len(queue) < order:
+                queue.append(markov_value)
+                continue
 
-#             if queue[-1] == "。":
-#                 markov_key = tuple(queue)
-#                 if markov_key not in model:
-#                     model[markov_key] = []
-#                 model.setdefault(markov_key, []).append("[BOS]")
-#                 queue.append("[BOS]")
-#             markov_key = tuple(queue)
-#             model.setdefault(markov_key, []).append(markov_value)
-#             queue.append(markov_value)
-#     return model
+            if queue[-1] == "。":
+                markov_key = tuple(queue)
+                if markov_key not in model:
+                    model[markov_key] = []
+                model.setdefault(markov_key, []).append("[BOS]")
+                queue.append("[BOS]")
+            markov_key = tuple(queue)
+            model.setdefault(markov_key, []).append(markov_value)
+            queue.append(markov_value)
+    return model
 
-# # モデルから文章作成
-# def generateSentence(model, sentence_num=5, seed="[BOS]", max_words = 100):    
-#     sentence_count = 0
+# モデルから文章作成
+def generateSentence(model, sentence_num=5, seed="[BOS]", max_words = 100):    
+    sentence_count = 0
 
-#     key_candidates = [key for key in model if key[0] == seed]
-#     if not key_candidates:
-#         print("Not find Keyword")
-#         return
-#     markov_key = random.choice(key_candidates)
-#     queue = deque(list(markov_key), len(list(model.keys())[0]))
+    key_candidates = [key for key in model if key[0] == seed]
+    if not key_candidates:
+        print("Not find Keyword")
+        return
+    markov_key = random.choice(key_candidates)
+    queue = deque(list(markov_key), len(list(model.keys())[0]))
 
-#     sentence = "".join(markov_key)
-#     for _ in range(max_words):
-#         markov_key = tuple(queue)
-#         next_word = random.choice(model[markov_key])
-#         sentence += next_word
-#         queue.append(next_word)
+    sentence = "".join(markov_key)
+    for _ in range(max_words):
+        markov_key = tuple(queue)
+        next_word = random.choice(model[markov_key])
+        sentence += next_word
+        queue.append(next_word)
 
-#         if next_word == "。":
-#             sentence_count += 1
-#             if sentence_count == sentence_num:
-#                 break
-#     print(sentence)
+        if next_word == "。":
+            sentence_count += 1
+            if sentence_count == sentence_num:
+                break
+    cdd = ResponseCandidate(sentence, 0.4 + random.random())
+    candidateList.append(cdd)
 
 # 応答文を生成する関数
 def generateResponse(inputText):
@@ -345,7 +346,7 @@ def generateResponse(inputText):
 
 setupKeywordScoreRule()
 setupKeywordMatchingRule()
-# marcov_model = makeModel()
+marcov_model = makeModel()
 
 # 学習モード移行
 def learning():
@@ -467,7 +468,18 @@ def runSL(message):
 
     
 def helper(message):
-    text = "\nコマンド : 機能\n$help : 当botの使用方法説明\n$learn : 学習モードを開始\n$exit : 学習モードを終了\n$sl : 汽車が走る\n\nその他の機能\n「しりとり」と言うとしりとりができます。\n「天気を教えて」と言うと八王子市の今日の天気を伝えます。\n文章に含まれる単語やその類義語のうんちくを言います(wikipedia参照)\n\n＊学習モードとは\n会話の内容を採点していただき、その点数と会話の内容を保存、学習します。\nこのデータはマルコフ連鎖モデルの作成、類似テキストが存在するときの返信の選択に使用されます。\nデータ数が増えるほど返信内容は良いものになります。"
+    text = f"\nコマンド : 機能\
+        \n$help : 当botの使用方法説明\
+        \n$learn : 学習モードを開始\
+        \n$exit : 学習モードを終了\
+        \n$sl : 汽車が走る\
+        \n\nその他の機能\
+        \n「しりとり」と言うとしりとりができます。\
+        \n「天気を教えて」と言うと八王子市の今日の天気を伝えます。\
+        \n文章に含まれる単語やその類義語のうんちくを言います(wikipedia参照)\
+        \n\n＊学習モードとは\n会話の内容を採点していただき、その点数と会話の内容を保存、学習します。\
+        \nこのデータはマルコフ連鎖モデルの作成、類似テキストが存在するときの返信の選択に使用されます。\
+        \nデータ数が増えるほど返信内容は良いものになります。（現在のデータ数{len(sRuleList)}）"
     message.reply(text)
 
 
